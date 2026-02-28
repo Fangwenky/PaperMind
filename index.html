@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaperMind - AI论文分析助手</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .settings-panel h3 {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .api-config {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .api-config select, .api-config input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .api-config input:focus, .api-config select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        /* Main Content Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h3 {
+            font-size: 1rem;
+        }
+
+        .card-body {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        /* Chat */
+        .chat-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: var(--primary);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.system {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+            font-size: 0.9rem;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Summary Sections */
+        .summary-section {
+            margin-bottom: 20px;
+        }
+
+        .summary-section h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .summary-content {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        /* Knowledge Base */
+        .knowledge-item {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .knowledge-item .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .knowledge-item .actions button {
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Status */
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
+        }
+
+        .status.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab:hover:not(.active) {
+            background: var(--border);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* Privacy Notice */
+        .privacy-notice {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            color: var(--success);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Processing Overlay */
+        .processing-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .processing-overlay.hidden {
+            display: none;
+        }
+
+        .progress-bar {
+            width: 300px;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #a855f7);
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🧠 PaperMind</div>
+            <div>
+                <span id="apiStatus" class="status warning">
+                    <span class="status-dot"></span>
+                    未配置API
+                </span>
+            </div>
+        </header>
+
+        <!-- API Settings -->
+        <div class="settings-panel">
+            <h3>⚙️ API 配置</h3>
+            <div class="privacy-notice">
+                🔒 隐私保护：您的API Key仅保存在本地浏览器中，不会发送到任何服务器
+            </div>
+            <div class="api-config">
+                <select id="apiProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="moonshot">Moonshot (月之暗面)</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="minimax">MiniMax</option>
+                    <option value="custom">自定义 API</option>
+                </select>
+                <input type="password" id="apiKey" placeholder="输入你的API Key">
+                <input type="text" id="apiBase" placeholder="API Base URL (可选)" style="display:none">
+                <button class="btn btn-primary" onclick="saveApiConfig()">保存配置</button>
+            </div>
+            <div id="modelSelect" style="margin-top: 10px;">
+                <select id="apiModel" style="padding: 8px 12px; border-radius: 6px; background: var(--bg); color: var(--text); border: 1px solid var(--border);">
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Upload -->
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📄</div>
+            <h3>上传论文</h3>
+            <p style="color: var(--text-muted); margin-top: 8px;">点击或拖拽PDF文件到此处</p>
+            <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-grid" id="mainContent" style="display: none;">
+            <!-- Summary Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>📊 分析结果</h3>
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('overview')">概括</button>
+                        <button class="tab" onclick="switchTab('detailed')">详解</button>
+                    </div>
+                </div>
+                <div class="card-body" id="summaryContent">
+                    <div class="empty-state">
+                        上传论文后自动分析
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>💬 追问 & 知识库</h3>
+                    <button class="btn btn-secondary" onclick="clearChat()" style="padding: 6px 12px; font-size: 12px;">清空对话</button>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="empty-state">
+                        可以针对论文内容追问
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="输入问题..." onkeypress="handleChatKeypress(event)">
+                    <button class="btn btn-primary" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Knowledge Base -->
+        <div class="card" style="margin-top: 20px;" id="knowledgeBaseSection" style="display: none;">
+            <div class="card-header">
+                <h3>📚 我的知识库</h3>
+                <button class="btn btn-secondary" onclick="exportKnowledge()" style="padding: 6px 12px; font-size: 12px;">导出</button>
+            </div>
+            <div class="card-body" id="knowledgeList">
+                <div class="empty-state">
+                    收藏的内容会显示在这里
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Overlay -->
+    <div class="processing-overlay hidden" id="processingOverlay">
+        <div class="spinner" style="width: 40px; height: 40px;"></div>
+        <div id="processingStatus">正在处理...</div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <script>
+        // PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State
+        let apiConfig = {
+            provider: 'openai',
+            key: '',
+            base: '',
+            model: 'gpt-4o'
+        };
+        let currentPaper = {
+            text: '',
+            name: '',
+            summary: {},
+            embedding: null
+        };
+        let chatHistory = [];
+        let knowledgeBase = JSON.parse(localStorage.getItem('paperMindKnowledge') || '[]');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            renderKnowledgeBase();
+            setupUpload();
+        });
+
+        // API Configuration
+        function loadConfig() {
+            const saved = localStorage.getItem('paperMindConfig');
+            if (saved) {
+                apiConfig = JSON.parse(saved);
+                document.getElementById('apiProvider').value = apiConfig.provider;
+                document.getElementById('apiKey').value = apiConfig.key;
+                document.getElementById('apiBase').value = apiConfig.base || '';
+                document.getElementById('apiModel').value = apiConfig.model;
+                updateApiStatus();
+                updateModelOptions();
+            }
+        }
+
+        function saveApiConfig() {
+            apiConfig.provider = document.getElementById('apiProvider').value;
+            apiConfig.key = document.getElementById('apiKey').value;
+            apiConfig.base = document.getElementById('apiBase').value;
+            apiConfig.model = document.getElementById('apiModel').value;
+            
+            localStorage.setItem('paperMindConfig', JSON.stringify(apiConfig));
+            updateApiStatus();
+            alert('API配置已保存！');
+        }
+
+        function updateApiStatus() {
+            const status = document.getElementById('apiStatus');
+            if (apiConfig.key) {
+                status.className = 'status success';
+                status.innerHTML = '<span class="status-dot"></span>已配置';
+            } else {
+                status.className = 'status warning';
+                status.innerHTML = '<span class="status-dot"></span>未配置API';
+            }
+        }
+
+        function updateModelOptions() {
+            const select = document.getElementById('apiModel');
+            const provider = document.getElementById('apiProvider').value;
+            
+            select.innerHTML = '';
+            
+            const models = {
+                openai: [
+                    {value: 'gpt-4o', text: 'GPT-4o'},
+                    {value: 'gpt-4o-mini', text: 'GPT-4o Mini'},
+                    {value: 'gpt-4-turbo', text: 'GPT-4 Turbo'}
+                ],
+                anthropic: [
+                    {value: 'claude-3-5-sonnet-20241022', text: 'Claude 3.5 Sonnet'},
+                    {value: 'claude-3-opus-20240229', text: 'Claude 3 Opus'}
+                ],
+                gemini: [
+                    {value: 'gemini-1.5-pro', text: 'Gemini 1.5 Pro'},
+                    {value: 'gemini-1.5-flash', text: 'Gemini 1.5 Flash'}
+                ],
+                moonshot: [
+                    {value: 'moonshot-v1-8k', text: 'Moonshot V1 8K'},
+                    {value: 'moonshot-v1-32k', text: 'Moonshot V1 32K'},
+                    {value: 'moonshot-v1-128k', text: 'Moonshot V1 128K'}
+                ],
+                deepseek: [
+                    {value: 'deepseek-chat', text: 'DeepSeek Chat'},
+                    {value: 'deepseek-coder', text: 'DeepSeek Coder'}
+                ],
+                minimax: [
+                    {value: 'MiniMax-M2.1', text: 'MiniMax M2.1'},
+                    {value: 'MiniMax-M2.5', text: 'MiniMax M2.5'}
+                ],
+                custom: [
+                    {value: 'gpt-4o', text: '自定义模型'}
+                ]
+            };
+
+            const options = models[provider] || models.openai;
+            options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                select.appendChild(option);
+            });
+
+            // Show/hide base URL input
+            const baseInput = document.getElementById('apiBase');
+            baseInput.style.display = provider === 'custom' ? 'block' : 'none';
+        }
+
+        document.getElementById('apiProvider').addEventListener('change', updateModelOptions);
+
+        // File Upload
+        function setupUpload() {
+            const area = document.getElementById('uploadArea');
+            const input = document.getElementById('fileInput');
+
+            area.addEventListener('click', () => input.click());
+            
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.classList.add('dragover');
+            });
+            
+            area.addEventListener('dragleave', () => {
+                area.classList.remove('dragover');
+            });
+            
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type === 'application/pdf') {
+                    processFile(file);
+                }
+            });
+
+            input.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    processFile(e.target.files[0]);
+                }
+            });
+        }
+
+        async function processFile(file) {
+            if (!apiConfig.key) {
+                alert('请先配置API Key！');
+                return;
+            }
+
+            showProcessing('正在解析PDF...');
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                let fullText = '';
+                const totalPages = pdf.numPages;
+
+                for (let i = 1; i <= totalPages; i++) {
+                    updateProcessing(`正在解析第 ${i}/${totalPages} 页...`);
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n\n';
+                }
+
+                currentPaper.text = fullText;
+                currentPaper.name = file.name;
+                
+                updateProcessing('正在分析论文...');
+                await analyzePaper(fullText);
+
+                document.getElementById('mainContent').style.display = 'grid';
+                document.getElementById('knowledgeBaseSection').style.display = 'block';
+                
+                hideProcessing();
+            } catch (error) {
+                hideProcessing();
+                alert('PDF解析失败: ' + error.message);
+                console.error(error);
+            }
+        }
+
+        // Paper Analysis
+        async function analyzePaper(text) {
+            const truncatedText = text.slice(0, 50000); // Limit text length
+            
+            const overviewPrompt = `你是一个专业的学术论文分析助手。请仔细阅读以下论文内容，然后提供：
+
+1. **论文标题**（如果能从内容中推断）
+2. **核心摘要**（3-5句话概括主要研究内容和贡献）
+3. **研究方法**（简要说明用了什么方法）
+4. **主要结论**（3-5个关键发现）
+5. **创新点**（论文的主要创新之处）
+
+请用中文回复，格式清晰：
+
+---
+## 📝 论文概述
+[你的分析结果]
+
+---
+`;
+
+            try {
+                const overview = await callAPI(overviewPrompt, truncatedText);
+                currentPaper.summary.overview = overview;
+                
+                updateProcessing('正在生成详解...');
+                const detailed = await callAPI(detailedPrompt(), truncatedText);
+                currentPaper.summary.detailed = detailed;
+
+                renderSummary();
+            } catch (error) {
+                alert('分析失败: ' + error.message);
+            }
+        }
+
+        function detailedPrompt() {
+            return `你是一个专业的学术论文分析助手。请用通俗易懂的语言对论文进行详细讲解：
+
+1. **背景介绍** - 这篇论文要解决什么问题？为什么这个问题重要？
+2. **现有方法** - 之前人们是怎么解决这个问题的？有什么不足？
+3. **本文方法** - 本文提出了什么新方法？核心思想是什么？
+4. **技术细节** - 关键的技术实现是什么？（用比喻的方式解释）
+5. **实验结果** - 实验证明了什么？效果如何？
+6. **应用场景** - 这个研究可以用在什么地方？
+7. **局限性** - 有什么不足或未解决的问题？
+8. **未来方向** - 可以往哪些方向发展？
+
+请用通俗易懂的语言解释，让非专业人士也能理解。格式：
+
+---
+## 📖 详细解读
+[你的详细分析]
+
+---
+`;
+        }
+
+        function renderSummary() {
+            const content = document.getElementById('summaryContent');
+            content.innerHTML = `
+                <div class="summary-section">
+                    <h4>📝 概括性总结</h4>
+                    <div class="summary-content">${currentPaper.summary.overview || '暂无'}</div>
+                </div>
+            `;
+        }
+
+        function switchTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const content = document.getElementById('summaryContent');
+            if (tab === 'overview') {
+                content.innerHTML = `
+                    <div class="summary-section">
+                        <h4>📝 概括性总结</h4>
+                        <div class="summary-content">${currentPaper.summary.overview || '暂无'}</div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="summary-section">
+                        <h4>📖 通俗讲解</h4>
+                        <div class="summary-content">${currentPaper.summary.detailed || '暂无'}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // API Call
+        async function callAPI(systemPrompt, userContent) {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent }
+            ];
+
+            let url, headers, body;
+
+            switch (apiConfig.provider) {
+                case 'openai':
+                    url = 'https://api.openai.com/v1/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    };
+                    body = {
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7
+                    };
+                    break;
+
+                case 'anthropic':
+                    url = 'https://api.anthropic.com/v1/messages';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiConfig.key,
+                        'anthropic-version': '2023-06-01'
+                    };
+                    const anthropicMessages = messages.map(m => ({
+                        role: m.role === 'system' ? 'user' : m.role,
+                        content: m.role === 'system' ? `System: ${m.content}` : m.content
+                    }));
+                    body = {
+                        model: apiConfig.model,
+                        max_tokens: 4000,
+                        messages: anthropicMessages
+                    };
+                    break;
+
+                case 'gemini':
+                    url = `https://generativelanguage.googleapis.com/v1/models/${apiConfig.model}:generateContent?key=${apiConfig.key}`;
+                    headers = { 'Content-Type': 'application/json' };
+                    body = {
+                        contents: [{ parts: [{ text: messages[0].content + '\n\n' + messages[1].content }] }],
+                        generationConfig: { temperature: 0.7 }
+                    };
+                    break;
+
+                case 'moonshot':
+                    url = apiConfig.base || 'https://api.moonshot.cn/v1/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    };
+                    body = {
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7
+                    };
+                    break;
+
+                case 'deepseek':
+                    url = apiConfig.base || 'https://api.deepseek.com/v1/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    };
+                    body = {
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7
+                    };
+                    break;
+
+                case 'minimax':
+                    url = apiConfig.base || 'https://api.minimax.chat/v1/text/chatcompletion_v2';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    };
+                    body = {
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7
+                    };
+                    break;
+
+                case 'custom':
+                    url = (apiConfig.base || 'https://api.openai.com/v1/chat/completions') + '/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    };
+                    body = {
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7
+                    };
+                    break;
+
+                default:
+                    throw new Error('Unknown provider');
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`API错误: ${response.status} - ${error}`);
+            }
+
+            const data = await response.json();
+
+            // Parse different response formats
+            if (apiConfig.provider === 'gemini') {
+                return data.candidates[0].content.parts[0].text;
+            } else if (apiConfig.provider === 'anthropic') {
+                return data.content[0].text;
+            } else {
+                return data.choices[0].message.content;
+            }
+        }
+
+        // Chat
+        function handleChatKeypress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message || !currentPaper.text) return;
+
+            if (!apiConfig.key) {
+                alert('请先配置API Key！');
+                return;
+            }
+
+            input.value = '';
+            
+            // Add user message
+            chatHistory.push({ role: 'user', content: message });
+            renderChat();
+
+            // Show loading
+            const messagesContainer = document.getElementById('chatMessages');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message assistant';
+            loadingDiv.innerHTML = '<div class="loading"><div class="spinner"></div>AI思考中...</div>';
+            messagesContainer.appendChild(loadingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            try {
+                const context = `你是一篇学术论文的AI助手。以下是论文内容摘要：
+${currentPaper.summary.overview || '无'}
+
+用户的问题是关于这篇论文的。请根据论文内容回答用户的问题。如果问题与论文无关，请礼貌地提醒用户。
+
+论文内容：
+${currentPaper.text.slice(0, 30000)}
+
+---
+用户问题：${message}
+
+请回答用户的问题，可以引用论文中的具体内容。`;
+
+                const response = await callAPI(
+                    '你是一个专业的学术论文助手，可以用中文回答用户关于论文的问题。',
+                    context
+                );
+
+                chatHistory.push({ role: 'assistant', content: response });
+                renderChat();
+            } catch (error) {
+                chatHistory.push({ role: 'system', content: '回答失败: ' + error.message });
+                renderChat();
+            }
+
+            // Remove loading
+            loadingDiv.remove();
+        }
+
+        function renderChat() {
+            const container = document.getElementById('chatMessages');
+            
+            if (chatHistory.length === 0) {
+                container.innerHTML = '<div class="empty-state">可以针对论文内容追问</div>';
+                return;
+            }
+
+            container.innerHTML = chatHistory.map((msg, idx) => {
+                if (msg.role === 'system') {
+                    return `<div class="message system">${msg.content}</div>`;
+                }
+                
+                const actions = msg.role === 'assistant' ? `
+                    <div class="actions">
+                        <button onclick="addToKnowledge(${idx})" style="background: var(--primary); color: white;">⭐ 收藏</button>
+                    </div>
+                ` : '';
+
+                return `
+                    <div class="message ${msg.role}">
+                        ${msg.content}
+                        ${actions}
+                    </div>
+                `;
+            }).join('');
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearChat() {
+            chatHistory = [];
+            renderChat();
+        }
+
+        // Knowledge Base
+        function addToKnowledge(idx) {
+            const msg = chatHistory[idx];
+            if (msg.role !== 'assistant') return;
+
+            const item = {
+                id: Date.now(),
+                content: msg.content,
+                paper: currentPaper.name,
+                date: new Date().toLocaleDateString('zh-CN')
+            };
+
+            knowledgeBase.push(item);
+            localStorage.setItem('paperMindKnowledge', JSON.stringify(knowledgeBase));
+            renderKnowledgeBase();
+            alert('已添加到知识库！');
+        }
+
+        function renderKnowledgeBase() {
+            const container = document.getElementById('knowledgeList');
+            
+            if (knowledgeBase.length === 0) {
+                container.innerHTML = '<div class="empty-state">收藏的内容会显示在这里</div>';
+                return;
+            }
+
+            container.innerHTML = knowledgeBase.map(item => `
+                <div class="knowledge-item">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">
+                        📄 ${item.paper} · ${item.date}
+                    </div>
+                    <div>${item.content.slice(0, 200)}${item.content.length > 200 ? '...' : ''}</div>
+                    <div class="actions">
+                        <button onclick="viewKnowledge(${item.id})" style="background: var(--primary); color: white;">查看</button>
+                        <button onclick="deleteKnowledge(${item.id})" style="background: var(--danger); color: white;">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function viewKnowledge(id) {
+            const item = knowledgeBase.find(k => k.id === id);
+            if (item) {
+                alert(item.content);
+            }
+        }
+
+        function deleteKnowledge(id) {
+            knowledgeBase = knowledgeBase.filter(k => k.id !== id);
+            localStorage.setItem('paperMindKnowledge', JSON.stringify(knowledgeBase));
+            renderKnowledgeBase();
+        }
+
+        function exportKnowledge() {
+            const content = knowledgeBase.map(item => 
+                `## ${item.paper} (${item.date})\n\n${item.content}\n\n---\n`
+            ).join('\n');
+
+            const blob = new Blob([content], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'PaperMind知识库.md';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Processing
+        function showProcessing(status) {
+            document.getElementById('processingOverlay').classList.remove('hidden');
+            document.getElementById('processingStatus').textContent = status;
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        function updateProcessing(status) {
+            document.getElementById('processingStatus').textContent = status;
+            document.getElementById('progressFill').style.width = 
+                (parseInt(document.getElementById('progressFill').style.width) + 20) % 100 + '%';
+        }
+
+        function hideProcessing() {
+            document.getElementById('processingOverlay').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
