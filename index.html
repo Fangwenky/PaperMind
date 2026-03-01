@@ -925,28 +925,46 @@
                     throw new Error('Unknown provider');
             }
 
-            const CORS_PROXY = 'https://corsproxy.io/?';
-            const response = await fetch(CORS_PROXY + encodeURIComponent(url), {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(body)
-            });
-
-            if (!response.ok) {
-                const error = await response.text();
-                throw new Error(`API错误: ${response.status} - ${error}`);
+            const CORS_PROXIES = [
+                'https://corsproxy.io/?',
+                'https://api.allorigins.win/raw?url=',
+                'https://cors.eu.org/'
+            ];
+            
+            let lastError;
+            for (const proxy of CORS_PROXIES) {
+                try {
+                    const response = await fetch(proxy + encodeURIComponent(url), {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(body),
+                        signal: AbortSignal.timeout(30000)
+                    });
+                    if (response.ok || response.status === 400) {
+                        if (!response.ok) {
+                            const error = await response.text();
+                            throw new Error(`API错误: ${response.status} - ${error}`);
+                        }
+                        const data = await response.json();
+                        
+                        // Parse different response formats
+                        if (apiConfig.provider === 'gemini') {
+                            return data.candidates[0].content.parts[0].text;
+                        } else if (apiConfig.provider === 'anthropic') {
+                            return data.content[0].text;
+                        } else if (data.choices && data.choices[0]) {
+                            return data.choices[0].message.content;
+                        } else if (data.text) {
+                            return data.text;
+                        }
+                    }
+                } catch (e) {
+                    lastError = e;
+                    console.log(`Proxy ${proxy} failed, trying next...`);
+                    continue;
+                }
             }
-
-            const data = await response.json();
-
-            // Parse different response formats
-            if (apiConfig.provider === 'gemini') {
-                return data.candidates[0].content.parts[0].text;
-            } else if (apiConfig.provider === 'anthropic') {
-                return data.content[0].text;
-            } else {
-                return data.choices[0].message.content;
-            }
+            throw lastError || new Error('All CORS proxies failed');
         }
 
         // Chat
