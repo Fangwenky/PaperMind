@@ -925,7 +925,8 @@
                     throw new Error('Unknown provider');
             }
 
-            const response = await fetch(url, {
+            const CORS_PROXY = 'https://corsproxy.io/?';
+            const response = await fetch(CORS_PROXY + encodeURIComponent(url), {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(body)
